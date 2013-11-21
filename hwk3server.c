@@ -28,7 +28,15 @@ void appendCMD(char* cmd);
 void dirlistCMD (char* cmd);
 void retrieveCMD(char* cmd);
 char *trimwhitespace(char *str);
-
+char *append(const char *orig, char c)
+{
+	size_t sz = strlen(orig);
+	char *str = malloc(sz + 2);
+	strcpy(str, orig);
+	str[sz] = c;
+	str[sz + 1] = '\0';
+	return str;
+}
 struct arg_struct {
 	int socket_desc;
 	char* path;
@@ -125,36 +133,54 @@ int main(int argc, char *argv[])
 		}	
 	}
 }
-
+char* readtospace(int sock){
+	char reader[3];
+	char* cmd="";
+	while(read(sock,reader,1)>0)
+	{
+		//printf("recv: %c\n",reader[0]);
+		//printf("recvlen: %d\n",(int)strlen(reader));
+		if(reader[0]==' '||reader[0]=='\n')
+			break;
+		cmd=append(cmd,reader[0]);
+	}
+	return cmd;
+}
 void *connection_handler(void *arguments){
 	struct arg_struct *args = arguments;	
 	int sock = args->socket_desc;
-	char * path = (char*)args->path;
-
-	char sendBuff[1025];	
-	char cmd[1025];
+	char * path = (char*)args->path;	
 	char *message ="This is a message to send \n\r";
-	time_t ticks;
 
-	ticks = time(NULL);	
+	//read until space
+	char* cmd=readtospace(sock);
+	printf("cmd %s\n",cmd);
+	char* bytesstring = readtospace(sock);
+	printf("bytesfromstring %s\n",bytesstring);
+	//printf("commmandlen: %d\n",(int)strlen(cmd));
 
-	int t=1;
-	while(1)
-	{	
-		//Gonna Test some ideas
-		char* buffer;
-		int n;
-		char cmd[1024];
+	/* while(1)
+	   {	
+	//Gonna Test some ideas
 
 
 
-		//old code
-		recv(sock,cmd,sizeof(cmd),0);
-		printf("[thread %u] Rcvd: %s",(int)pthread_self(),cmd);
-		parseRecv(sock,cmd,path);
-		send(sock,message,strlen(message),0);	
-		bzero(cmd,1024);
-	}
+
+
+
+	char* buffer;
+	int n;
+	char cmd[1024];
+
+
+
+	//old code
+	recv(sock,cmd,sizeof(cmd),0);
+	printf("[thread %u] Rcvd: %s",(int)pthread_self(),cmd);
+	parseRecv(sock,cmd,path);
+	send(sock,message,strlen(message),0);	
+	bzero(cmd,1024);
+	}*/
 
 
 	printf("[thread %u] connection closed\n",(int)pthread_self());
@@ -211,17 +237,17 @@ void storeCMD(int socketfd, char* cmd,char* path)
 	//read in the bytes we filealready we have
 	char* filecontent = strtok(NULL,""); 
 	trimwhitespace(filecontent);
-	
+
 	//remove char
 	if(strlen(filecontent)>	filebytes)
 	{
-		
+
 	}
 	if(strlen(filecontent)<filebytes)
 	{
 
 	}           
-	
+
 	FILE *fp = fopen(filename, "ab+");
 
 	//read in the file	
