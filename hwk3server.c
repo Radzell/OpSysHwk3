@@ -157,29 +157,7 @@ void *connection_handler(void *arguments){
 	char* cmd=readtospace(sock);
 	parseRecv(sock,cmd,path);
 
-	/* while(1)
-	   {	
-	//Gonna Test some ideas
-
-
-
-
-
-
-	char* buffer;
-	int n;
-	char cmd[1024];
-
-
-
-	//old code
-	recv(sock,cmd,sizeof(cmd),0);
-	printf("[thread %u] Rcvd: %s",(int)pthread_self(),cmd);
-	parseRecv(sock,cmd,path);
-	send(sock,message,strlen(message),0);	
-	bzero(cmd,1024);
-	}*/
-
+	
 
 	printf("[thread %u] connection closed\n",(int)pthread_self());
 	close(sock);
@@ -226,14 +204,18 @@ void storeCMD(int sock, char* cmd,char* path)
 
 	if((byteRead = recv(sock, buffer, bytesnum, 0)) <= 0)
 	{
+		send(sock,ERROR,strlen(ERROR),0);
 		return; 
 	}
 
 	FILE* pFile = fopen(fullpath,"wb");
-	if(!pFile)
+	if(!pFile){
+		send(sock,ERROR,strlen(ERROR),0);
 		return;
+	}
 	fwrite(buffer,1,sizeof(buffer),pFile);
 	fclose(pFile);
+	send(sock,ACK,strlen(ACK),0);
 }
 void appendCMD(int sock, char* cmd,char* path)
 {
