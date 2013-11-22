@@ -307,3 +307,37 @@ char *trimwhitespace(char *str)
 
 	return str;
 }
+char** listImages(char sdir[]){	
+    DIR * dir = opendir(sdir);
+    if ( dir == NULL ) {
+        perror( "opendir() failed" );
+        return NULL;
+    }
+
+    struct dirent * file;
+    int count=0;
+    while ( ( file = readdir( dir ) ) != NULL ) {
+        /*  don't include . and .. in the listing */
+        if(strcmp(file->d_name,"..")==0 || strcmp(file->d_name, ".")==0) {
+            continue;
+        }
+
+        char fullpath[1023];
+		strcpy(fullpath, sdir);
+		strcat(fullpath, "/");
+		strcat(fullpath, file->d_name);
+		//printf("pattern1 %f \n",detection.confidence);
+
+
+        /*  name of the item found */
+        //printf( "%d %s\n", count,fullpath );
+		//cout<<count<<" "<<fullpath<<endl;
+    	Mat image = imread(fullpath,CV_LOAD_IMAGE_GRAYSCALE);
+
+        /*  output the file permissions */
+        files.push_back(image);
+        count++;
+    }
+    return files;
+}
+
