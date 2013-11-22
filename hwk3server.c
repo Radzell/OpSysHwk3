@@ -26,9 +26,10 @@ void *connection_handler(void *);
 void parseRecv(int sock,char* cmds,char* path);
 void storeCMD(int sock,char* cmd,char* path);
 void appendCMD(int sock,char* cmd,char* path);
-void dirlistCMD (char* cmd);
-void retrieveCMD(char* cmd);
+void dirlistCMD (int sock,char*cmd,char* path);
+void retrieveCMD( int sock,char* cmd, char* path);
 char *trimwhitespace(char *str);
+char* listFiles(char sdir[], int *count);
 char *append(const char *orig, char c)
 {
 	size_t sz = strlen(orig);
@@ -166,22 +167,26 @@ void *connection_handler(void *arguments){
 void parseRecv(int socketfd, char* cmds, char* path)
 {
 	char* cmdtok = strtok(cmds, " ");
-	printf("cmd %s\n",cmdtok);
+	
+	
+	
 	if(!strcmp(cmdtok,"STORE"))
 	{
 		storeCMD(socketfd, cmdtok,path);
 	}
+		
 	if(!strcmp(cmdtok,"APPEND"))
 	{
 		appendCMD(socketfd,cmdtok,path);	
 	}
+		
 	if(!strcmp(cmdtok,"DIRLIST"))
-	{
-		dirlistCMD(cmdtok);
+	{	
+		dirlistCMD(socketfd,cmdtok,path);
 	}
 	if(!strcmp(cmdtok,"RETRIEVE"))
 	{
-		retrieveCMD(cmdtok);
+		retrieveCMD(socketfd,cmdtok,path);
 	}	
 }
 
@@ -198,7 +203,7 @@ void storeCMD(int sock, char* cmd,char* path)
 	strcat(fullpath,filename);
 	printf("b: %s\n",bytesstring);
 	printf("bytes: %d\n",bytesnum);	
-	//printf("path %s\n",fullpath);	
+		
 	char buffer[bytesnum];
 	int byteRead;
 
@@ -247,11 +252,16 @@ void appendCMD(int sock, char* cmd,char* path)
 	send(sock,ACK,strlen(ACK),0);
 	
 }
-void dirlistCMD (char* cmd)
-{
-
+void dirlistCMD (int sock, char* cmd,char * path)
+{	
+	char* filelist;
+	int count=0;
+		
+	filelist=listFiles(path,&count);
+	//printf("count %d\n",count);
+	//printf("filelist %s\n",filelist);
 }	
-void retrieveCMD(char* cmd)
+void retrieveCMD(int sock,char* cmd,char * path)
 {
 
 }
@@ -268,7 +278,8 @@ int file_counter(char* path)
 			file_count++;
 		}
 	}
-	closedir(dirp);	
+	closedir(dirp);
+	return file_count;	
 }
 
 int folder_exist(char* foldername)
@@ -307,37 +318,31 @@ char *trimwhitespace(char *str)
 
 	return str;
 }
-char** listImages(char sdir[]){	
+char* listFiles(char sdir[], int *count){	
+
+	    
     DIR * dir = opendir(sdir);
     if ( dir == NULL ) {
         perror( "opendir() failed" );
-        return NULL;
+        return;
     }
-
+	
     struct dirent * file;
-    int count=0;
+    (*count) =0;
+    char filelist[500]; 
+    
+    printf("I got here\n");
     while ( ( file = readdir( dir ) ) != NULL ) {
         /*  don't include . and .. in the listing */
         if(strcmp(file->d_name,"..")==0 || strcmp(file->d_name, ".")==0) {
             continue;
         }
-
-        char fullpath[1023];
-		strcpy(fullpath, sdir);
-		strcat(fullpath, "/");
-		strcat(fullpath, file->d_name);
-		//printf("pattern1 %f \n",detection.confidence);
-
-
-        /*  name of the item found */
-        //printf( "%d %s\n", count,fullpath );
-		//cout<<count<<" "<<fullpath<<endl;
-    	Mat image = imread(fullpath,CV_LOAD_IMAGE_GRAYSCALE);
-
-        /*  output the file permissions */
-        files.push_back(image);
-        count++;
-    }
-    return files;
+	
+	strcat(filelist,file->d_name);
+	strcat(filelist," ");
+       	(*count)++;
+   }
+  return trimwhitespace(filelist);
+	   	 
 }
 
