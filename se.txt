@@ -1,1 +1,0 @@
-echo STORE test.txt 31 This is a file with shit in it

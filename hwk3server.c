@@ -29,7 +29,7 @@ void appendCMD(int sock,char* cmd,char* path);
 void dirlistCMD (int sock,char*cmd,char* path);
 void retrieveCMD( int sock,char* cmd, char* path);
 char *trimwhitespace(char *str);
-char* listFiles(char sdir[], int *count);
+char* listFiles(char sdir[], int *count,char prefix[]);
 char *append(const char *orig, char c)
 {
 	size_t sz = strlen(orig);
@@ -142,7 +142,7 @@ char* readtospace(int sock){
 	{
 
 
-		if(reader[0]==' '||reader[0]=='\n')
+		if(reader[0]==' ')
 			break;
 		cmd=append(cmd,reader[0]);
 	}
@@ -254,12 +254,26 @@ void appendCMD(int sock, char* cmd,char* path)
 }
 void dirlistCMD (int sock, char* cmd,char * path)
 {	
+	//check for prefix
+	char reader[3];
+	char* prefix="";
+	
+	if(read(sock,reader,1)>0)
+	{
+		printf("r %c\n",reader[0]);
+		if(reader[0]!='\n')
+			prefix = append(prefix,reader[0]);
+			strcpy(prefix, readtospace(sock));
+		printf("stinky\n");
+	}
+	printf("prefix %s\n",prefix);
 	char* filelist;
 	int count=0;
 		
-	filelist=listFiles(path,&count);
-	//printf("count %d\n",count);
-	//printf("filelist %s\n",filelist);
+	filelist=listFiles(path,&count,prefix);
+	printf("count %d\n",count);
+	printf("filelist %s\n",filelist);
+	
 }	
 void retrieveCMD(int sock,char* cmd,char * path)
 {
@@ -318,7 +332,7 @@ char *trimwhitespace(char *str)
 
 	return str;
 }
-char* listFiles(char sdir[], int *count){	
+char* listFiles(char sdir[], int *count,char prefix[]){	
 
 	    
     DIR * dir = opendir(sdir);
@@ -331,12 +345,16 @@ char* listFiles(char sdir[], int *count){
     (*count) =0;
     char filelist[500]; 
     
-    printf("I got here\n");
+    
     while ( ( file = readdir( dir ) ) != NULL ) {
         /*  don't include . and .. in the listing */
         if(strcmp(file->d_name,"..")==0 || strcmp(file->d_name, ".")==0) {
             continue;
         }
+	 if(strncmp(file->d_name, prefix, (int)strlen(prefix)) != 0 ) {
+            continue;
+        }
+
 	
 	strcat(filelist,file->d_name);
 	strcat(filelist," ");
