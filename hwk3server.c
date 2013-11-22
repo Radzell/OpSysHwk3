@@ -17,14 +17,15 @@
 #define IP_ADDR "127.0.0.1"
 #define DEFAULT_MODE      S_IRWXU | S_IRGRP |  S_IXGRP | S_IROTH | S_IXOTH
 #define CHUNK_SIZE 1
-
+#define ERROR "ERROR"
+#define ACK "ACK"
 int folder_exist(char *foldername);
 void folder_management(char* foldername);
 int file_counter(char* path);
 void *connection_handler(void *);
 void parseRecv(int sock,char* cmds,char* path);
 void storeCMD(int sock,char* cmd,char* path);
-void appendCMD(char* cmd);
+void appendCMD(int sock,char* cmd,char* path);
 void dirlistCMD (char* cmd);
 void retrieveCMD(char* cmd);
 char *trimwhitespace(char *str);
@@ -138,8 +139,8 @@ char* readtospace(int sock){
 	char* cmd="";
 	while(read(sock,reader,1)>0)
 	{
-		//printf("recv: %c\n",reader[0]);
-		//printf("recvlen: %d\n",(int)strlen(reader));
+
+
 		if(reader[0]==' '||reader[0]=='\n')
 			break;
 		cmd=append(cmd,reader[0]);
@@ -150,14 +151,11 @@ void *connection_handler(void *arguments){
 	struct arg_struct *args = arguments;	
 	int sock = args->socket_desc;
 	char * path = (char*)args->path;	
-	char *message ="This is a message to send \n\r";
+	char * message ="This is a message to send \n\r";
 
 	//read until space
 	char* cmd=readtospace(sock);
-	printf("cmd %s\n",cmd);
-	char* bytesstring = readtospace(sock);
-	printf("bytesfromstring %s\n",bytesstring);
-	//printf("commmandlen: %d\n",(int)strlen(cmd));
+	parseRecv(sock,cmd,path);
 
 	/* while(1)
 	   {	
@@ -190,14 +188,14 @@ void *connection_handler(void *arguments){
 void parseRecv(int socketfd, char* cmds, char* path)
 {
 	char* cmdtok = strtok(cmds, " ");
-	printf("Cmds, %d\n",(int)strlen(cmdtok));
+	printf("cmd %s\n",cmdtok);
 	if(!strcmp(cmdtok,"STORE"))
 	{
 		storeCMD(socketfd, cmdtok,path);
 	}
 	if(!strcmp(cmdtok,"APPEND"))
 	{
-		appendCMD(cmdtok);	
+		appendCMD(socketfd,cmdtok,path);	
 	}
 	if(!strcmp(cmdtok,"DIRLIST"))
 	{
@@ -210,71 +208,62 @@ void parseRecv(int socketfd, char* cmds, char* path)
 }
 
 
-void storeCMD(int socketfd, char* cmd,char* path)
+void storeCMD(int sock, char* cmd,char* path)
 {
-	char * message = "";
-	char* filename = strtok(NULL, " ");
-	char* bytenumstring = strtok(NULL, " ");
+	char* filename = readtospace(sock);
+	char* bytesstring = readtospace(sock);
+	int bytesnum = atoi(bytesstring);
+	char fullpath[200];
+	strcpy(fullpath,"./");
+	strcat(fullpath,path);
+	strcat(fullpath,"/");
+	strcat(fullpath,filename);
+	printf("b: %s\n",bytesstring);
+	printf("bytes: %d\n",bytesnum);	
+	//printf("path %s\n",fullpath);	
+	char buffer[bytesnum];
+	int byteRead;
 
-	if(!filename)
+	if((byteRead = recv(sock, buffer, bytesnum, 0)) <= 0)
+	{
+		return; 
+	}
+
+	FILE* pFile = fopen(fullpath,"wb");
+	if(!pFile)
 		return;
-
-	if(!bytenumstring)
-		return;
-
-	strcat(path,"/");
-	strcat(path,filename);
-
-	if(folder_exist(path))
-	{
-		strcat(message,"FILE EXISTS");
-	}
-
-	int filebytes = atoi(bytenumstring);
-	char filebuffer[filebytes];
-
-
-	//read in the bytes we filealready we have
-	char* filecontent = strtok(NULL,""); 
-	trimwhitespace(filecontent);
-
-	//remove char
-	if(strlen(filecontent)>	filebytes)
-	{
-
-	}
-	if(strlen(filecontent)<filebytes)
-	{
-
-	}           
-
-	FILE *fp = fopen(filename, "ab+");
-
-	//read in the file	
-
-	int size_recv , total_size= 0;
-	char chunk[CHUNK_SIZE];
-
-	while(total_size<filebytes)
-	{
-		memset(chunk ,0 , CHUNK_SIZE);  //clear the variable
-		if((size_recv =  recv(socketfd , chunk , CHUNK_SIZE , 0) ) < 0)
-		{
-			break;
-		}
-		else
-		{
-			total_size += size_recv;
-			printf("%s" , chunk);
-			//fwrite(chunk, CHUNK_SIZE, 1, fp);
-		}
-	}
-	printf("Later\n");
-	return;
+	fwrite(buffer,1,sizeof(buffer),pFile);
+	fclose(pFile);
 }
-void appendCMD(char* cmd)
+void appendCMD(int sock, char* cmd,char* path)
 {
+	char* filename = readtospace(sock);
+	char* bytesstring = readtospace(sock);
+	int bytesnum = atoi(bytesstring);
+	char fullpath[200];
+	strcpy(fullpath,"./");
+	strcat(fullpath,path);
+	strcat(fullpath,"/");
+	strcat(fullpath,filename);
+	//printf("b: %s\n",bytesstring);
+	//printf("bytes: %d\n",bytesnum);	
+	char buffer[bytesnum];
+	int byteRead;
 
+	if((byteRead = recv(sock, buffer, bytesnum, 0)) <= 0)
+	{
+		send(sock,ERROR,strlen(ERROR),0);   
+		return; 
+	}
+
+	FILE* pFile = fopen(fullpath,"a+");
+	if(!pFile)
+		send(sock,ERROR,strlen(ERROR),0);   
+		return;
+	fwrite(buffer,1,sizeof(buffer),pFile);
+	fclose(pFile);
+	send(sock,ACK,strlen(ACK),0);
+	
 }
 void dirlistCMD (char* cmd)
 {
