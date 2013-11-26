@@ -80,9 +80,9 @@ int main(int argc, char *argv[])
 	struct sockaddr_in serv_addr;	
 	struct sockaddr_in client_addr;
 
-	int clientlen = sizeof(client_addr);	
-
-	time_t ticks;
+	//int clientlen = sizeof(client_addr);	
+	socklen_t clientlen;
+	
 
 	//creates an un-named socket inside the kernal and returns a socket descriptor(like a file descriptor)
 	listenfd = socket(AF_INET,SOCK_STREAM,0);
@@ -142,7 +142,7 @@ char* readtospace(int sock){
 	{
 
 
-		if(reader[0]==' ')
+		if(reader[0]==' '||reader[0]=='\n')
 			break;
 		cmd=append(cmd,reader[0]);
 	}
@@ -152,12 +152,15 @@ void *connection_handler(void *arguments){
 	struct arg_struct *args = arguments;	
 	int sock = args->socket_desc;
 	char * path = (char*)args->path;	
-	char * message ="This is a message to send \n\r";
+	
 
 	//read until space
-	char* cmd=readtospace(sock);
-	parseRecv(sock,cmd,path);
-
+	while(1){
+		
+		char* cmd=readtospace(sock);
+		parseRecv(sock,cmd,path);
+		
+	}
 	
 
 	printf("[thread %u] connection closed\n",(int)pthread_self());
@@ -165,29 +168,29 @@ void *connection_handler(void *arguments){
 }
 
 void parseRecv(int socketfd, char* cmds, char* path)
-{
-	char* cmdtok = strtok(cmds, " ");
-	
-	
-	
-	if(!strcmp(cmdtok,"STORE"))
+{	
+	//printf("cmd: %s\n",cmds);
+	//printf("test %d\n",strcmp(cmds,""));
+		
+	if(!strcmp(cmds,"STORE"))
 	{
-		storeCMD(socketfd, cmdtok,path);
+		storeCMD(socketfd, cmds,path);
 	}
 		
-	if(!strcmp(cmdtok,"APPEND"))
+	if(!strcmp(cmds,"APPEND"))
 	{
-		appendCMD(socketfd,cmdtok,path);	
+		appendCMD(socketfd,cmds,path);	
 	}
 		
-	if(!strcmp(cmdtok,"DIRLIST"))
+	if(!strcmp(cmds,"DIRLIST"))
 	{	
-		dirlistCMD(socketfd,cmdtok,path);
+		dirlistCMD(socketfd,cmds,path);
 	}
-	if(!strcmp(cmdtok,"RETRIEVE"))
+	if(!strcmp(cmds,"RETRIEVE"))
 	{
-		retrieveCMD(socketfd,cmdtok,path);
-	}	
+		retrieveCMD(socketfd,cmds,path);
+	}
+	return;	
 }
 
 
@@ -197,29 +200,32 @@ void storeCMD(int sock, char* cmd,char* path)
 	char* bytesstring = readtospace(sock);
 	int bytesnum = atoi(bytesstring);
 	char fullpath[200];
+	
+	printf("[thread %u] Rcvd: STORE %s %s\n",(int)pthread_self(),filename,bytesstring);
 	strcpy(fullpath,"./");
 	strcat(fullpath,path);
 	strcat(fullpath,"/");
 	strcat(fullpath,filename);
-	printf("b: %s\n",bytesstring);
-	printf("bytes: %d\n",bytesnum);	
 		
 	char buffer[bytesnum];
 	int byteRead;
-
+	
 	if((byteRead = recv(sock, buffer, bytesnum, 0)) <= 0)
 	{
-		send(sock,ERROR,strlen(ERROR),0);
+		printf("[thread %u] Sent: ERROR\n",(int)pthread_self());
+		send(sock,ERROR,strlen(ERROR),0);	
 		return; 
 	}
 
 	FILE* pFile = fopen(fullpath,"wb");
 	if(!pFile){
+		printf("[thread %u] Sent: ERROR\n",(int)pthread_self());
 		send(sock,ERROR,strlen(ERROR),0);
 		return;
 	}
 	fwrite(buffer,1,sizeof(buffer),pFile);
 	fclose(pFile);
+	printf("[thread %u] Sent: ACK\n",(int)pthread_self());
 	send(sock,ACK,strlen(ACK),0);
 }
 void appendCMD(int sock, char* cmd,char* path)
@@ -232,23 +238,27 @@ void appendCMD(int sock, char* cmd,char* path)
 	strcat(fullpath,path);
 	strcat(fullpath,"/");
 	strcat(fullpath,filename);
-	//printf("b: %s\n",bytesstring);
-	//printf("bytes: %d\n",bytesnum);	
+	
+		
 	char buffer[bytesnum];
 	int byteRead;
 
 	if((byteRead = recv(sock, buffer, bytesnum, 0)) <= 0)
 	{
+		printf("[thread %u] Sent: ERROR\n",(int)pthread_self());
 		send(sock,ERROR,strlen(ERROR),0);   
 		return; 
 	}
 
 	FILE* pFile = fopen(fullpath,"a+");
-	if(!pFile)
+	if(!pFile){
+		printf("[thread %u] Sent: ERROR\n",(int)pthread_self());
 		send(sock,ERROR,strlen(ERROR),0);   
 		return;
+	}
 	fwrite(buffer,1,sizeof(buffer),pFile);
 	fclose(pFile);
+	printf("[thread %u] Sent: ACK\n",(int)pthread_self());
 	send(sock,ACK,strlen(ACK),0);
 	
 }
@@ -256,28 +266,83 @@ void dirlistCMD (int sock, char* cmd,char * path)
 {	
 	//check for prefix
 	char reader[3];
-	char* prefix="";
-	
+	char filecount[15];
+
+	char* prefix="";	
 	if(read(sock,reader,1)>0)
 	{
-		printf("r %c\n",reader[0]);
-		if(reader[0]!='\n')
+		
+		if(reader[0]!='\n'){
 			prefix = append(prefix,reader[0]);
-			strcpy(prefix, readtospace(sock));
-		printf("stinky\n");
+			strcat(prefix, readtospace(sock));
+		}
 	}
-	printf("prefix %s\n",prefix);
 	char* filelist;
 	int count=0;
 		
 	filelist=listFiles(path,&count,prefix);
-	printf("count %d\n",count);
-	printf("filelist %s\n",filelist);
-	
+	char message[strlen(filelist)+strlen(ACK)+15];
+	strcpy(message,ACK);
+	sprintf(filecount,"%d",count);
+	strcat(message," ");
+	strcat(message,filecount);
+	strcat(message," ");
+	strcat(message,filelist);
+	strcat(message,"\n");
+
+	printf("[thread %u] Sent: %s\n",message,(int)pthread_self());
+	send(sock,message,strlen(message),0);
 }	
 void retrieveCMD(int sock,char* cmd,char * path)
 {
+	char* filename = readtospace(sock);
+	char fullfile[200];
+	strcpy(fullfile,path);
+	strcpy(fullfile,"/");
+	strcpy(fullfile,filename);
+	printf("filename: %s\n",fullfile);
+	if(!folder_exist(fullfile)){
+		//send do not exist
+	}
 
+	FILE * pFile;
+	long lSize;
+  	char * buffer = NULL;
+  	size_t result;
+
+	pFile = fopen ( filename , "rb" );
+	char* message = "NO SUCH FILE";
+  	if (pFile==NULL) {send(sock,message,strlen(message),0), fputs ("File error",stderr); exit (1);}
+
+ 	 // obtain file size:
+  	fseek (pFile , 0 , SEEK_END);
+  	lSize = ftell (pFile);
+  	rewind (pFile);
+
+  	// allocate memory to contain the whole file:
+  	buffer = (char*) malloc (sizeof(char)*lSize);
+	bzero(buffer, strlen(buffer));
+  	if (buffer == NULL) {fputs ("Memory error",stderr); exit (2);}
+
+  	// copy the file into the buffer:
+  	result = fread (buffer,1,lSize,pFile);
+  	if (result != lSize) {fputs ("Reading error",stderr); exit (3);}
+  	/*  the whole file is now loaded in the memory buffer. */
+  	// terminate
+  	fclose (pFile);
+	//preing
+	char* msg = NULL;
+  	msg = (char*) malloc ((strlen(buffer)+5)*sizeof(char) + sizeof(lSize));
+	bzero(msg, strlen(msg));
+	msg[strlen(msg)-1] = '\0';
+	sprintf(msg, "ACK %lu %s\n", lSize , buffer);
+	int n = send( sock, msg, strlen( msg ), 0 );
+	if ( n < strlen( msg ) ) {
+		perror( "send()" );
+	}
+  	free (buffer);
+  	free (msg);
+	return;
 }
 /* Functions For Folder and File Management */
 int file_counter(char* path)
@@ -318,14 +383,14 @@ char *trimwhitespace(char *str)
 	char *end;
 
 	// Trim leading space
-	while(isspace(*str)) str++;
+	while(*str==' ') str++;
 
 	if(*str == 0)  // All spaces?
 		return str;
 
 	// Trim trailing space
 	end = str + strlen(str) - 1;
-	while(end > str && isspace(*end)) end--;
+	while(end > str && *end==' ') end--;
 
 	// Write new null terminator
 	*(end+1) = 0;
@@ -338,12 +403,12 @@ char* listFiles(char sdir[], int *count,char prefix[]){
     DIR * dir = opendir(sdir);
     if ( dir == NULL ) {
         perror( "opendir() failed" );
-        return;
+        return NULL;
     }
 	
     struct dirent * file;
     (*count) =0;
-    char filelist[500]; 
+    char filelist[900]; 
     
     
     while ( ( file = readdir( dir ) ) != NULL ) {
@@ -360,7 +425,6 @@ char* listFiles(char sdir[], int *count,char prefix[]){
 	strcat(filelist," ");
        	(*count)++;
    }
-  return trimwhitespace(filelist);
-	   	 
+  return trimwhitespace(filelist);	   	 
 }
 
